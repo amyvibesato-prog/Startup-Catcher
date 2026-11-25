@@ -1,0 +1,6 @@
+{
+  "name": "Startup Catcher",
+  "description": "Десктопний веб-прототип утиліти для вибіркового запуску програм автозавантаження Windows після старту ПК.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

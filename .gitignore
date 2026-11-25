@@ -1,0 +1,24 @@
+# Published native runtime & user WebView2/autostart backup data
+app/
+startup-catcher.zip
+
+# .NET build artifacts
+native/bin/
+native/obj/
+
+# Frontend dependencies & build output
+source/node_modules/
+source/dist/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+source/.env
+source/.env.local
+
+# OS / IDE clutter
+.DS_Store
+Thumbs.db
+*.user
+*.suo

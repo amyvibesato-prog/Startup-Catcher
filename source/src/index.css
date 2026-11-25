@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Manrope", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+    font-family: var(--font-sans);
+  }
+}
+
+/* Custom sleek Windows 11-style subtle scrollbar */
+.sc-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+.sc-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sc-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sc-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+}
+
+.sc-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.34);
+}
+
+/* Matte tactile range slider matching smoked-glass aesthetic */
+.sc-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.sc-slider:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.55);
+  outline-offset: 3px;
+}
+
+.sc-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #f1f4f8;
+  border: 1px solid rgba(15, 20, 26, 0.55);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sc-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+.sc-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #f1f4f8;
+  border: 1px solid rgba(15, 20, 26, 0.55);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sc-slider::-moz-range-thumb:hover {
+  transform: scale(1.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
