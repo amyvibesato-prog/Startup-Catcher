@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.IO.Compression;
+using System.Net.Http;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -56,6 +59,12 @@ public sealed class MainForm : Form
     [DllImport("user32.dll")]
     private static extern IntPtr SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
 
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateRoundRectRgn(int nLeftRect, int nTopRect, int nRightRect, int nBottomRect, int nWidthEllipse, int nHeightEllipse);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr hObject);
+
     public MainForm()
     {
         _appDir = AppContext.BaseDirectory;
@@ -72,7 +81,7 @@ public sealed class MainForm : Form
         Height = 620;
         MinimumSize = new Size(480, 500);
         StartPosition = FormStartPosition.CenterScreen;
-        BackColor = Color.Black;
+        BackColor = Color.FromArgb(40, 46, 54);
 
         ApplyWindows11GlassStyle();
 
@@ -95,6 +104,9 @@ public sealed class MainForm : Form
 
         var cornerPref = DWMWCP_ROUND;
         DwmSetWindowAttribute(Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref cornerPref, sizeof(int));
+
+        var margins = new MARGINS { cxLeftWidth = 1, cxRightWidth = 1, cyTopHeight = 1, cyBottomHeight = 1 };
+        DwmExtendFrameIntoClientArea(Handle, ref margins);
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -131,7 +143,13 @@ public sealed class MainForm : Form
             var root = doc.RootElement;
             var requestId = root.GetProperty("requestId").GetString() ?? "";
             var action = root.GetProperty("action").GetString() ?? "";
-            var payload = root.TryGetProperty("payload", out var p) ? p : default;
+            var payload = root.TryGetProperty("payload", out var p) ? p.Clone() : default;
+
+            if (action is "checkForUpdates" or "installUpdate")
+            {
+                _ = HandleAsyncActionAsync(requestId, action, payload);
+                return;
+            }
 
             object result = action switch
             {
@@ -161,6 +179,152 @@ public sealed class MainForm : Form
             }
             catch { /* ignore */ }
         }
+    }
+
+    private static string GetCurrentAppVersion()
+    {
+        var ver = Assembly.GetExecutingAssembly().GetName().Version;
+        return ver is not null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "1.0.1";
+    }
+
+    private async Task HandleAsyncActionAsync(string requestId, string action, JsonElement payload)
+    {
+        object result;
+        try
+        {
+            result = action switch
+            {
+                "checkForUpdates" => await CheckForUpdatesAsync(),
+                "installUpdate" => await InstallUpdateAsync(payload),
+                _ => new { ok = false, error = $"Unknown async action: {action}" }
+            };
+        }
+        catch (Exception ex)
+        {
+            result = new { ok = false, error = ex.Message };
+        }
+
+        var response = JsonSerializer.Serialize(new { requestId, result });
+        BeginInvoke(() =>
+        {
+            try
+            {
+                _webView.CoreWebView2?.PostWebMessageAsJson(response);
+            }
+            catch { /* ignore */ }
+        });
+    }
+
+    private static async Task<object> CheckForUpdatesAsync()
+    {
+        var currentVersion = GetCurrentAppVersion();
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(12) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("StartupCatcher/1.0");
+        http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+
+        var json = await http.GetStringAsync("https://api.github.com/repos/amyvibesato-prog/Startup-Catcher/releases/latest");
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        var tag = root.TryGetProperty("tag_name", out var tagEl) ? tagEl.GetString() ?? "" : "";
+        var availableVersion = tag.TrimStart('v', 'V');
+        var releaseNotes = root.TryGetProperty("body", out var bodyEl) ? bodyEl.GetString() ?? "" : "";
+
+        string? downloadUrl = null;
+        if (root.TryGetProperty("assets", out var assetsEl) && assetsEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var asset in assetsEl.EnumerateArray())
+            {
+                var name = asset.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) &&
+                    asset.TryGetProperty("browser_download_url", out var urlEl))
+                {
+                    downloadUrl = urlEl.GetString();
+                    break;
+                }
+            }
+        }
+
+        var updateAvailable =
+            Version.TryParse(currentVersion, out var curVer) &&
+            Version.TryParse(availableVersion, out var newVer) &&
+            newVer > curVer &&
+            !string.IsNullOrWhiteSpace(downloadUrl);
+
+        return new
+        {
+            ok = true,
+            currentVersion,
+            availableVersion,
+            updateAvailable,
+            downloadUrl,
+            releaseNotes
+        };
+    }
+
+    private async Task<object> InstallUpdateAsync(JsonElement payload)
+    {
+        var downloadUrl = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("downloadUrl", out var u)
+            ? u.GetString()
+            : null;
+
+        if (string.IsNullOrWhiteSpace(downloadUrl))
+        {
+            return new { ok = false, error = "Не вказано посилання на оновлення." };
+        }
+
+        var tempRoot = Path.Combine(Path.GetTempPath(), "StartupCatcherUpdate");
+        if (Directory.Exists(tempRoot)) Directory.Delete(tempRoot, true);
+        Directory.CreateDirectory(tempRoot);
+
+        var zipPath = Path.Combine(tempRoot, "update.zip");
+        var extractDir = Path.Combine(tempRoot, "extracted");
+
+        using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(3) })
+        {
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("StartupCatcher/1.0");
+            await using var fs = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None);
+            await using var stream = await http.GetStreamAsync(downloadUrl);
+            await stream.CopyToAsync(fs);
+        }
+
+        ZipFile.ExtractToDirectory(zipPath, extractDir, true);
+
+        // Find directory containing StartupCatcher.exe inside extracted archive
+        var exeMatch = Directory.GetFiles(extractDir, "StartupCatcher.exe", SearchOption.AllDirectories).FirstOrDefault();
+        var sourceDir = exeMatch is not null ? Path.GetDirectoryName(exeMatch)! : extractDir;
+        var targetDir = _appDir.TrimEnd('\\', '/');
+        var exePath = Path.Combine(targetDir, "StartupCatcher.exe");
+        var pid = Environment.ProcessId;
+
+        var cmdPath = Path.Combine(tempRoot, "apply_update.cmd");
+        var script = string.Join("\r\n", new[]
+        {
+            "@echo off",
+            "chcp 65001 >nul",
+            ":waitloop",
+            $"tasklist /FI \"PID eq {pid}\" 2>nul | find \"{pid}\" >nul",
+            "if not errorlevel 1 (",
+            "  timeout /t 1 /nobreak >nul",
+            "  goto waitloop",
+            ")",
+            $"robocopy \"{sourceDir}\" \"{targetDir}\" /E /XD data /NFL /NDL /NJH /NJS /NC /NS /NP >nul",
+            $"start \"\" \"{exePath}\"",
+            $"rmdir /s /q \"{tempRoot}\"",
+            "exit"
+        });
+        await File.WriteAllTextAsync(cmdPath, script);
+
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = "cmd.exe",
+            Arguments = $"/c \"{cmdPath}\"",
+            CreateNoWindow = true,
+            UseShellExecute = false
+        });
+
+        BeginInvoke(() => Application.Exit());
+        return new { ok = true };
     }
 
     private object WindowMinimize()

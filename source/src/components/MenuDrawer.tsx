@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { Check, Plus, RotateCcw, Trash2, X } from 'lucide-react';
+import { Check, Download, Plus, RefreshCw, RotateCcw, Trash2, X } from 'lucide-react';
+import { isNativeDesktop, updateControls, windowControls, type UpdateCheckResult } from '../adapters/systemAdapter';
 import type { AccentColor, BaseWindowColor, PresetApp, StartupApp, ThemeConfig } from '../types/startup';
 import { hasAppWithName, PRESET_APPS } from '../utils/startupState';
 import { ACCENT_LIMITS, BASE_LIMITS, isThemeDefault } from '../utils/theme';
@@ -37,9 +38,14 @@ export function MenuDrawer({
   const [appName, setAppName] = useState('');
   const [appCommand, setAppCommand] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [updateState, setUpdateState] = useState<UpdateCheckResult | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
+  const native = isNativeDesktop();
   const { base, accent } = theme;
   const isDefaultTheme = isThemeDefault(theme);
 
@@ -57,27 +63,40 @@ export function MenuDrawer({
 
   return (
     <>
-      {/* Mobile / narrow viewport scrim */}
-      <div
-        aria-hidden="true"
-        onClick={onClose}
-        className="fixed inset-0 z-20 bg-black/50 backdrop-blur-[2px] lg:hidden"
-      />
+      {/* Mobile / narrow viewport scrim (not needed in native full-window drawer) */}
+      {!native && (
+        <div
+          aria-hidden="true"
+          onClick={onClose}
+          className="fixed inset-0 z-20 bg-black/50 backdrop-blur-[2px] lg:hidden"
+        />
+      )}
 
       <aside
         id="startup-catcher-menu"
         aria-label="Меню керування програмами та кольорами вікна"
-        className="fixed inset-x-3 bottom-3 top-3 z-30 flex flex-col overflow-hidden rounded-2xl shadow-[0_24px_64px_rgba(0,0,0,0.62)] lg:static lg:inset-auto lg:z-10 lg:max-h-[min(700px,calc(100vh-48px))] lg:w-[392px] lg:shrink-0"
+        className={
+          native
+            ? 'fixed inset-0 z-30 flex flex-col overflow-hidden rounded-none'
+            : 'fixed inset-x-3 bottom-3 top-3 z-30 flex flex-col overflow-hidden rounded-2xl shadow-[0_24px_64px_rgba(0,0,0,0.62)] lg:static lg:inset-auto lg:z-10 lg:max-h-[min(700px,calc(100vh-48px))] lg:w-[392px] lg:shrink-0'
+        }
         style={{
           backgroundColor: 'var(--sc-panel-bg)',
           backdropFilter: 'blur(24px) saturate(120%)',
           WebkitBackdropFilter: 'blur(24px) saturate(120%)',
-          border: '1px solid var(--sc-border)',
+          border: native ? 'none' : '1px solid var(--sc-border)',
         }}
       >
-        {/* Drawer header */}
+        {/* Drawer header (draggable in native mode) */}
         <div
-          className="flex items-center justify-between gap-3 px-4 py-3.5"
+          onMouseDown={(e) => {
+            if (!native) return;
+            if ((e.target as HTMLElement).closest('button')) return;
+            windowControls.startDrag();
+          }}
+          className={`flex items-center justify-between gap-3 px-4 py-3.5 ${
+            native ? 'cursor-grab select-none active:cursor-grabbing' : ''
+          }`}
           style={{ borderBottom: '1px solid var(--sc-border-subtle)' }}
         >
           <h2
@@ -466,6 +485,107 @@ export function MenuDrawer({
               />
             </div>
           </section>
+
+          {native && (
+            <section
+              aria-labelledby="menu-section-updates"
+              className="space-y-2.5 rounded-xl p-3.5"
+              style={{
+                backgroundColor: 'var(--sc-inner-bg)',
+                border: '1px solid var(--sc-border-subtle)',
+              }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3
+                    id="menu-section-updates"
+                    className="text-[12.5px] font-semibold"
+                    style={{ color: 'var(--sc-text)' }}
+                  >
+                    Оновлення з GitHub
+                  </h3>
+                  <p className="text-[11px]" style={{ color: 'var(--sc-text-muted)' }}>
+                    {updateState?.currentVersion
+                      ? `Поточна версія: v${updateState.currentVersion}`
+                      : 'Перевірка нових релізів'}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isCheckingUpdate || isInstallingUpdate}
+                  onClick={async () => {
+                    setIsCheckingUpdate(true);
+                    setUpdateError(null);
+                    try {
+                      const res = await updateControls.checkForUpdates();
+                      setUpdateState(res);
+                      if (!res.ok && res.error) {
+                        setUpdateError(res.error);
+                      }
+                    } catch (err) {
+                      setUpdateError(err instanceof Error ? err.message : 'Помилка перевірки оновлень.');
+                    } finally {
+                      setIsCheckingUpdate(false);
+                    }
+                  }}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[11.5px] font-medium transition-colors duration-150 hover:brightness-125 disabled:opacity-50"
+                  style={{
+                    backgroundColor: 'var(--sc-control-bg)',
+                    color: 'var(--sc-text)',
+                    border: '1px solid var(--sc-border-subtle)',
+                  }}
+                >
+                  <RefreshCw className={`h-3 w-3 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+                  <span>{isCheckingUpdate ? 'Перевірка...' : 'Перевірити'}</span>
+                </button>
+              </div>
+
+              {updateError && (
+                <p className="text-[11px] text-amber-300/90">{updateError}</p>
+              )}
+
+              {updateState?.ok && !updateState.updateAvailable && (
+                <p className="text-[11px]" style={{ color: 'var(--sc-text-muted)' }}>
+                  У тебе вже остання версія (v{updateState.currentVersion}).
+                </p>
+              )}
+
+              {updateState?.ok && updateState.updateAvailable && updateState.downloadUrl && (
+                <div className="space-y-2 pt-1">
+                  <p className="text-[11.5px] font-medium" style={{ color: 'var(--sc-text)' }}>
+                    Доступна нова версія: v{updateState.availableVersion}
+                  </p>
+                  <button
+                    type="button"
+                    disabled={isInstallingUpdate}
+                    onClick={async () => {
+                      setIsInstallingUpdate(true);
+                      setUpdateError(null);
+                      try {
+                        const res = await updateControls.installUpdate(updateState.downloadUrl!);
+                        if (!res.ok) {
+                          setUpdateError(res.error ?? 'Не вдалося встановити оновлення.');
+                        }
+                      } catch (err) {
+                        setUpdateError(err instanceof Error ? err.message : 'Помилка встановлення оновлення.');
+                      } finally {
+                        setIsInstallingUpdate(false);
+                      }
+                    }}
+                    className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold transition-all duration-150 hover:brightness-110 disabled:opacity-50"
+                    style={{
+                      backgroundColor: 'var(--sc-accent)',
+                      color: 'var(--sc-accent-fg)',
+                    }}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    <span>{isInstallingUpdate ? 'Завантаження...' : `Оновити до v${updateState.availableVersion}`}</span>
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
         </div>
       </aside>
     </>

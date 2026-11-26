@@ -1,5 +1,6 @@
 # Published native runtime & user WebView2/autostart backup data
 app/
+release/
 startup-catcher.zip
 
 # .NET build artifacts

@@ -362,9 +362,8 @@ export default function App() {
         style={{
           ...cssVariables,
           backgroundColor: 'var(--sc-window-bg)',
-          border: '1px solid var(--sc-border)',
         }}
-        className="relative flex h-screen w-screen flex-col overflow-hidden rounded-xl transition-[background-color,border-color] duration-150"
+        className="relative flex h-screen w-screen flex-col overflow-hidden rounded-none transition-[background-color] duration-150"
       >
         <WindowHeader
           activeTab={activeTab}

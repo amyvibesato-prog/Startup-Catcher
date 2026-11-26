@@ -51,7 +51,24 @@ export const windowControls = {
     invokeNative<{ ok: boolean }>('setWindowOpacity', { opacity }).catch(() => undefined),
 };
 
-function invokeNative<T>(action: string, payload?: unknown): Promise<T> {
+export interface UpdateCheckResult {
+  ok: boolean;
+  currentVersion: string;
+  availableVersion?: string;
+  updateAvailable: boolean;
+  downloadUrl?: string;
+  releaseNotes?: string;
+  error?: string;
+}
+
+export const updateControls = {
+  checkForUpdates: () =>
+    invokeNative<UpdateCheckResult>('checkForUpdates', undefined, 20000),
+  installUpdate: (downloadUrl: string) =>
+    invokeNative<{ ok: boolean; error?: string }>('installUpdate', { downloadUrl }, 180000),
+};
+
+function invokeNative<T>(action: string, payload?: unknown, timeoutMs = 15000): Promise<T> {
   const webview = getWebView();
   if (!webview) {
     return Promise.reject(new Error('WebView2 bridge unavailable'));
@@ -62,7 +79,7 @@ function invokeNative<T>(action: string, payload?: unknown): Promise<T> {
     const timer = window.setTimeout(() => {
       webview.removeEventListener('message', onMessage);
       reject(new Error(`Native call timed out: ${action}`));
-    }, 15000);
+    }, timeoutMs);
 
     function onMessage(event: { data: unknown }) {
       const data = event.data as { requestId?: string; result?: T; error?: string } | null;

@@ -4,7 +4,7 @@ export const BASE_LIMITS = {
   hue: { min: 0, max: 360 },
   saturation: { min: 0, max: 100 },
   lightness: { min: 5, max: 45 },
-  opacity: { min: 35, max: 98 },
+  opacity: { min: 35, max: 100 },
 } as const;
 
 export const ACCENT_LIMITS = {
@@ -179,10 +179,10 @@ export function buildThemeCssVariables(rawTheme: ThemeConfig): Record<string, st
   const { hue: ah, saturation: as, lightness: al } = theme.accent;
 
   const alpha = Number((bo / 100).toFixed(2));
-  const innerAlpha = Number(Math.max(0.24, Math.min(0.82, alpha * 0.68)).toFixed(2));
-  const rowActiveAlpha = Number(Math.max(0.32, Math.min(0.92, alpha * 0.84)).toFixed(2));
-  const rowInactiveAlpha = Number(Math.max(0.16, Math.min(0.65, alpha * 0.48)).toFixed(2));
-  const panelAlpha = Number(Math.max(0.45, Math.min(0.96, alpha + 0.06)).toFixed(2));
+  const innerAlpha = Number(Math.max(0.24, Math.min(0.96, alpha * 0.88)).toFixed(2));
+  const rowActiveAlpha = Number(Math.max(0.32, Math.min(0.98, alpha * 0.94)).toFixed(2));
+  const rowInactiveAlpha = Number(Math.max(0.16, Math.min(0.78, alpha * 0.58)).toFixed(2));
+  const panelAlpha = Number(Math.max(0.45, Math.min(1.0, alpha + 0.06)).toFixed(2));
 
   const accentFg = getReadableForeground(ah, as, al);
   const accentHoverLightness = al > 55 ? Math.max(25, al - 6) : Math.min(94, al + 7);
@@ -199,7 +199,7 @@ export function buildThemeCssVariables(rawTheme: ThemeConfig): Record<string, st
     '--sc-inner-bg': `hsla(${bh}, ${bs}%, ${Math.max(4, bl - 4)}%, ${innerAlpha})`,
     '--sc-row-active-bg': `hsla(${bh}, ${bs}%, ${Math.min(56, bl + 8)}%, ${rowActiveAlpha})`,
     '--sc-row-inactive-bg': `hsla(${bh}, ${bs}%, ${Math.max(4, bl - 2)}%, ${rowInactiveAlpha})`,
-    '--sc-control-bg': `hsla(${bh}, ${bs}%, ${Math.min(54, bl + 6)}%, ${Math.min(0.86, alpha)})`,
+    '--sc-control-bg': `hsla(${bh}, ${bs}%, ${Math.min(54, bl + 6)}%, ${Math.min(0.98, alpha)})`,
     '--sc-border': 'rgba(255, 255, 255, 0.12)',
     '--sc-border-subtle': 'rgba(255, 255, 255, 0.08)',
     '--sc-border-active': 'rgba(255, 255, 255, 0.18)',

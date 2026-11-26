@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>StartupCatcher</AssemblyName>
+    <Version>1.0.1</Version>
     <ApplicationIcon>app_icon.ico</ApplicationIcon>
   </PropertyGroup>
 
